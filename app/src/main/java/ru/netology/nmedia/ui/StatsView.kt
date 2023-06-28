@@ -1,5 +1,6 @@
 package ru.netology.nmedia.ui
 
+import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Canvas
 import android.graphics.Paint
@@ -7,6 +8,7 @@ import android.graphics.PointF
 import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.View
+import android.view.animation.LinearInterpolator
 import androidx.core.content.withStyledAttributes
 import ru.netology.nmedia.R
 import ru.netology.nmedia.util.AndroidUtils
@@ -22,14 +24,13 @@ class StatsView @JvmOverloads constructor(
     private var radius = 0F
     private var center = PointF(0F, 0F)
     private var oval = RectF(0F, 0F, 0F, 0F)
-    private var textView = ""
-    private var progress = 0F
-    private var sumTotal = 0F
-    private var sum = 0F
 
     private var lineWidth = AndroidUtils.dp(context, 5F).toFloat()
     private var fontSize = AndroidUtils.dp(context, 40F).toFloat()
     private var colors = emptyList<Int>()
+
+    private var progress = 0F
+    private var valueAnimator: ValueAnimator? = null
 
     init {
         context.withStyledAttributes(attrs, R.styleable.StatsView) {
@@ -55,7 +56,7 @@ class StatsView @JvmOverloads constructor(
     var data: List<Float> = emptyList()
         set(value) {
             field = value
-            invalidate()
+            update()
         }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -66,43 +67,50 @@ class StatsView @JvmOverloads constructor(
             center.x + radius, center.y + radius,
         )
     }
+
     override fun onDraw(canvas: Canvas) {
         if (data.isEmpty()) {
             return
         }
 
-        data.forEach() {
-            if (it >= 0) {
-                sum += it
-                sumTotal += it
-            } else {
-                sumTotal += (-1F * it)
-            }
-        }
-
+        val progressAngle = progress * 360F
         var startFrom = -90F
         for ((index, datum) in data.withIndex()) {
-            if (datum >= 0) {
-                val angle = datum / sumTotal * 360F
-                paint.color = colors.getOrNull(index) ?: randomColor()
-                canvas.drawArc(oval, startFrom, angle, false, paint)
-                startFrom += angle
-            }
+            val angle = 360F * datum
+            paint.color = colors.getOrNull(index) ?: randomColor()
+            canvas.drawArc(oval, startFrom + progressAngle, angle * progress, false, paint)
+            startFrom += angle
         }
 
-        progress = (sum * 100 / sumTotal)
-        textView = "%.2f%%".format(progress)
+        if (progress == 1F) {
+            paint.color = colors[0]
+            canvas.drawArc(oval, startFrom, 1F, false, paint)
+        }
+
         canvas.drawText(
-            textView,
+            "%.2f%%".format(data.sum() * 100),
             center.x,
             center.y + textPaint.textSize / 4,
             textPaint,
         )
+    }
 
+    private fun update() {
+        valueAnimator?.let {
+            it.removeAllListeners()
+            it.cancel()
+        }
+        progress = 0F
 
-        if (progress == 100F) {
-            paint.color = colors[0]
-            canvas.drawArc(oval, startFrom, 1F, false, paint)
+        valueAnimator = ValueAnimator.ofFloat(0F, 1F).apply {
+            addUpdateListener { anim ->
+                progress = anim.animatedValue as Float
+                invalidate()
+            }
+            duration = 3000
+            interpolator = LinearInterpolator()
+        }.also {
+            it.start()
         }
     }
 
